@@ -8,6 +8,10 @@ torch>=2.0.0
 pytorch-crf>=0.7.2
 stanza>=1.8.0
 
+# Visualization
+matplotlib>=3.7.0
+tqdm>=4.65.0
+
 # Utilities
 pathlib2>=2.3.0
 

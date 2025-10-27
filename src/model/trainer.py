@@ -1,6 +1,7 @@
 """
 Trainer for aspect extraction model with multi-seed support, early stopping, and experiment tracking.
 Supports different experimental scenarios: baseline, zero-shot, LODO.
+Enhanced with real-time visualization and detailed logging.
 """
 
 import os
@@ -22,10 +23,10 @@ from src.model.model import AspectExtractionModel, create_label_mapping
 from src.model.config import ModelTrainingConfig, ExperimentConfig
 from src.model.data_loader import create_data_loaders, get_file_paths_for_experiment
 from src.model.evaluator import SpanLevelEvaluator
+from src.utils.logging_config import setup_logging, LogProgress
+from src.utils.visualization import TrainingVisualizer
 
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Logger will be configured by setup_logging in run_experiment
 logger = logging.getLogger(__name__)
 
 
@@ -142,6 +143,12 @@ class AspectExtractionTrainer:
         # Create output directories
         self.setup_output_directories()
         
+        # Setup visualizer
+        self.visualizer = TrainingVisualizer(
+            save_dir=self.output_dir,
+            experiment_name=experiment_config.experiment_name
+        )
+        
         logger.info(f"Trainer initialized for experiment: {experiment_config.experiment_name}")
         logger.info(f"Device: {self.device}")
         logger.info(f"Training samples: {len(train_loader.dataset)}")
@@ -257,12 +264,22 @@ class AspectExtractionTrainer:
             num_batches += 1
             self.global_step += 1
             
+            # Log step loss to visualizer
+            self.visualizer.log_step_loss(self.global_step, loss.item())
+            
+            # Detailed step logging every 50 steps
+            if self.global_step % 50 == 0:
+                logger.info(f"Step {self.global_step}: loss={loss.item():.4f}, "
+                           f"lr_enc={scheduler.get_last_lr()[0]:.2e}, "
+                           f"lr_head={scheduler.get_last_lr()[1]:.2e}")
+            
             # Update progress bar
             progress_bar.set_postfix({
                 'loss': f"{loss.item():.4f}",
                 'avg_loss': f"{total_loss/num_batches:.4f}",
                 'lr_enc': f"{scheduler.get_last_lr()[0]:.2e}",
-                'lr_head': f"{scheduler.get_last_lr()[1]:.2e}"
+                'lr_head': f"{scheduler.get_last_lr()[1]:.2e}",
+                'step': self.global_step
             })
         
         epoch_metrics = {
@@ -339,6 +356,15 @@ class AspectExtractionTrainer:
             f'{split_name}_samples': len(all_predictions)
         }
         
+        # Detailed logging of evaluation results
+        logger.info(f"{split_name.upper()} Results:")
+        logger.info(f"  Loss: {avg_loss:.4f}")
+        logger.info(f"  Micro F1: {micro_f1:.4f}")
+        logger.info(f"  Macro F1: {macro_f1:.4f}")
+        logger.info(f"  Micro Precision: {micro_precision:.4f}")
+        logger.info(f"  Micro Recall: {micro_recall:.4f}")
+        logger.info(f"  Samples: {len(all_predictions)}")
+        
         return metrics
     
     def train_single_seed(self, seed: int) -> Dict[str, Any]:
@@ -381,12 +407,27 @@ class AspectExtractionTrainer:
             
             seed_history.append(epoch_metrics)
             
-            # Logging
-            logger.info(
-                f"Seed {seed}, Epoch {epoch+1}/{self.training_config.num_epochs} - "
-                f"train_loss: {train_metrics['train_loss']:.4f}, "
-                f"val_loss: {eval_metrics.get('val_loss', eval_metrics.get('test_loss', 0)):.4f}"
+            # Log to visualizer
+            val_loss = eval_metrics.get('val_loss', eval_metrics.get('test_loss', 0))
+            val_f1 = eval_metrics.get('val_micro_f1', eval_metrics.get('test_micro_f1', 0))
+            self.visualizer.log_epoch_metrics(
+                epoch + 1,
+                train_metrics['train_loss'], 
+                val_loss,
+                train_f1=None,  # We don't calculate train F1 during training for speed
+                val_f1=val_f1
             )
+            
+            # Detailed epoch logging
+            logger.info("=" * 60)
+            logger.info(f"EPOCH {epoch+1}/{self.training_config.num_epochs} COMPLETED (Seed {seed})")
+            logger.info("=" * 60)
+            logger.info(f"Training Loss: {train_metrics['train_loss']:.4f}")
+            logger.info(f"Validation Loss: {val_loss:.4f}")
+            logger.info(f"Validation F1: {val_f1:.4f}")
+            logger.info(f"Learning Rate (encoder): {train_metrics['learning_rate_encoder']:.2e}")
+            logger.info(f"Learning Rate (head+CRF): {train_metrics['learning_rate_head_crf']:.2e}")
+            logger.info("=" * 60)
             
             # Early stopping check
             eval_score = eval_metrics.get(
@@ -449,8 +490,14 @@ class AspectExtractionTrainer:
         with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
+        # Save visualization data and create final plots
+        logger.info("Creating final training visualizations...")
+        self.visualizer.save_history()
+        self.visualizer.create_final_summary_plot()
+        
         logger.info(f"Multi-seed training completed. Results saved to {results_path}")
         logger.info(f"Saved {len(all_results)} seed results with {len(aggregated_metrics)} metrics")
+        logger.info(f"Training plots saved to: {self.visualizer.plots_dir}")
         
         return results
 
@@ -477,6 +524,21 @@ def run_experiment(
     experiment_config = get_experiment_config(experiment_name)
     if training_config is None:
         training_config = get_training_config()
+    
+    # Setup enhanced logging
+    setup_logging(
+        experiment_name=experiment_config.experiment_name,
+        logs_dir=experiment_config.logs_dir,
+        log_level="INFO",
+        console_output=True
+    )
+    
+    # Log experiment start
+    logger.info("🚀 STARTING EXPERIMENT")
+    logger.info("=" * 80)
+    logger.info(f"Experiment: {experiment_config.experiment_name}")
+    logger.info(f"Timestamp: {datetime.now().isoformat()}")
+    logger.info("=" * 80)
     
     # Print configuration summary
     from src.model.config import print_config_summary
