@@ -33,7 +33,19 @@ echo "💻 Using GPU=1"
 # Build image if it doesn't exist
 if [[ "$(docker images -q aspect-extraction 2> /dev/null)" == "" ]]; then
     echo "🐳 Building Docker image..."
-    docker build -t aspect-extraction .
+    
+    # Try building with main Dockerfile first
+    if docker build -f docker/Dockerfile -t aspect-extraction . 2>/dev/null; then
+        echo "✅ Built with main Dockerfile"
+    else
+        echo "⚠️  Main Dockerfile failed, trying simple version..."
+        if docker build -f docker/Dockerfile.simple -t aspect-extraction . 2>/dev/null; then
+            echo "✅ Built with simple Dockerfile"
+        else
+            echo "❌ Both Dockerfiles failed. Check Docker installation and network."
+            exit 1
+        fi
+    fi
 fi
 
 # Run experiment on GPU=1
@@ -42,7 +54,7 @@ docker run --gpus '"device=1"' \
     -v $(pwd)/datasets:/app/datasets \
     -e CUDA_VISIBLE_DEVICES=1 \
     aspect-extraction \
-    python3 run_experiment.py $EXPERIMENT --batch_size $BATCH_SIZE --epochs $EPOCHS --device cuda
+    python3 scripts/run_experiment.py $EXPERIMENT --batch_size $BATCH_SIZE --epochs $EPOCHS --device cuda
 
 echo "✅ Experiment completed!"
 echo "📁 Results saved in: results/experiments/$EXPERIMENT/"

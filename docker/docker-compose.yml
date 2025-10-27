@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   aspect-extraction:
-    build: .
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: aspect-extraction-gpu
     volumes:
       # Mount results directory to save outputs on host
@@ -19,4 +21,4 @@ services:
               count: 1
               capabilities: [gpu]
     # Default command can be overridden
-    command: python3 run_experiment.py test
+    command: python3 scripts/run_experiment.py test
