@@ -18,8 +18,26 @@ class DataConfig:
     # Tokenizer settings
     TOKENIZER_NAME = "xlm-roberta-base"
     
+    # Sentence segmentation settings
+    STANZA_MODELS = {
+        "ru": "ru",  # Russian model
+        "kz": "kk"   # Kazakh model (native support)
+    }
+    
     # Supported languages
     LANGUAGES = ["ru", "kz"]
+    
+    # Language mapping for file processing
+    LANGUAGE_CODES = {
+        "ru": "ru",  # Russian files use "ru" 
+        "kz": "kz"   # Kazakh files use "kz"
+    }
+    
+    # Full language names
+    LANGUAGE_NAMES = {
+        "ru": "Russian",
+        "kz": "Kazakh"
+    }
     
     # Supported domains
     DOMAINS = ["it", "ling", "med", "psy"]

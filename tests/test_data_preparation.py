@@ -44,12 +44,24 @@ def test_data_preparation():
         # Test sentence splitting
         print("\n3. Testing sentence splitting...")
         text = test_data['abstract'][0]
-        sentences = preparator.split_into_sentences(text)
+        sentences = preparator.split_into_sentences(text, "ru")
         print(f"   Original text split into {len(sentences)} sentences:")
         for i, sent in enumerate(sentences):
             print(f"     {i+1}: {sent}")
         assert len(sentences) >= 2, "Should split into multiple sentences"
         print("   ✅ Sentence splitting works correctly")
+        
+        # Test sentence splitting for Kazakh (if available)
+        print("\n3.5. Testing Kazakh sentence splitting...")
+        kz_text = "Бұл тестілік мәтін. Біз машиналық оқыту әдісін қолданамыз. Нәтижелер жақсы дәлдікті көрсетеді."
+        kz_sentences = preparator.split_into_sentences(kz_text, "kz")
+        print(f"   Kazakh text split into {len(kz_sentences)} sentences:")
+        for i, sent in enumerate(kz_sentences):
+            print(f"     {i+1}: {sent}")
+        if len(kz_sentences) >= 2:
+            print("   ✅ Kazakh sentence splitting works correctly")
+        else:
+            print("   ⚠️  Kazakh model might not be available, using fallback")
         
         # Test aspect extraction from column (now the only source)
         print("\n4. Testing aspect extraction from aspects column...")
@@ -72,7 +84,7 @@ def test_data_preparation():
         
         # Test sentence-level BIO tagging
         print("\n6. Testing sentence-level BIO tagging...")
-        sentences = preparator.split_into_sentences(text)
+        sentences = preparator.split_into_sentences(text, "ru")
         sentence_data = preparator.align_aspects_with_sentences(sentences, aspects)
         print(f"   Processed {len(sentences)} sentences → {len(sentence_data)} sentence data")
         

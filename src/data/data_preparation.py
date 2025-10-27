@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import List, Tuple
 from transformers import AutoTokenizer
+import stanza
+import warnings
 
 from src.config import config, setup_directories
 
@@ -16,16 +18,66 @@ class DataPreparator:
     """Simple data preparation class for aspect extraction."""
     
     def __init__(self):
-        """Initialize with XLM-RoBERTa tokenizer."""
+        """Initialize with XLM-RoBERTa tokenizer and Stanza processors."""
         self.tokenizer = AutoTokenizer.from_pretrained(config.TOKENIZER_NAME)
         setup_directories()
+        
+        # Initialize Stanza processors for sentence segmentation
+        self.stanza_processors = {}
+        # Suppress Stanza's verbose output
+        warnings.filterwarnings("ignore", category=UserWarning, module="stanza")
+        
+        print("Initializing Stanza processors for sentence segmentation...")
+        
+        # Initialize processors for both languages
+        for lang_code, stanza_model in config.STANZA_MODELS.items():
+            try:
+                self.stanza_processors[lang_code] = stanza.Pipeline(
+                    lang=stanza_model, 
+                    processors="tokenize",  # Only tokenization for sentence segmentation
+                    use_gpu=False,  # Use CPU for simplicity
+                    verbose=False
+                )
+                print(f"✅ Stanza {lang_code.upper()} ({stanza_model}) processor initialized")
+            except Exception as e:
+                print(f"⚠️  Failed to initialize {lang_code.upper()} processor: {e}")
+                # Continue with other languages
+                continue
+        
+        if not self.stanza_processors:
+            print("⚠️  No Stanza processors initialized, falling back to regex-based splitting")
+            self.stanza_processors = None
     
     def parse_csv_file(self, file_path: Path) -> pd.DataFrame:
         """Load CSV file and return DataFrame."""
         return pd.read_csv(file_path)
     
-    def split_into_sentences(self, text: str) -> List[str]:
-        """Split text into sentences using simple regex rules."""
+    def split_into_sentences(self, text: str, language: str = "ru") -> List[str]:
+        """Split text into sentences using Stanza NLP pipeline."""
+        
+        # Try Stanza first if available
+        if self.stanza_processors and language in self.stanza_processors:
+            try:
+                # Use appropriate processor for the language
+                processor = self.stanza_processors[language]
+                doc = processor(text)
+                
+                sentences = []
+                for sentence in doc.sentences:
+                    sent_text = sentence.text.strip()
+                    if len(sent_text) > 10:  # Filter out very short fragments
+                        sentences.append(sent_text)
+                
+                return sentences
+                
+            except Exception as e:
+                print(f"⚠️  Stanza processing failed for {language}, falling back to regex: {e}")
+        
+        # Fallback to regex-based splitting
+        return self._regex_split_sentences(text)
+    
+    def _regex_split_sentences(self, text: str) -> List[str]:
+        """Fallback regex-based sentence splitting."""
         # Simple sentence splitting for Russian and Kazakh
         # Split on sentence-ending punctuation followed by space and capital letter
         # Using explicit character classes instead of ranges to avoid Unicode issues
@@ -155,8 +207,8 @@ class DataPreparator:
                 print("  Warning: No aspects found in row")
                 continue
             
-            # Split text into sentences
-            sentences = self.split_into_sentences(text)
+            # Split text into sentences using appropriate language
+            sentences = self.split_into_sentences(text, language)
             
             # Process each sentence separately
             sentence_data = self.align_aspects_with_sentences(sentences, aspects)
