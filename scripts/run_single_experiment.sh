@@ -35,14 +35,17 @@ if [[ "$(docker images -q aspect-extraction 2> /dev/null)" == "" ]]; then
     echo "🐳 Building Docker image..."
     
     # Try building with main Dockerfile first
-    if docker build -f docker/Dockerfile -t aspect-extraction . 2>/dev/null; then
+    echo "📦 Trying main Dockerfile..."
+    if docker build -f docker/Dockerfile -t aspect-extraction .; then
         echo "✅ Built with main Dockerfile"
     else
         echo "⚠️  Main Dockerfile failed, trying simple version..."
-        if docker build -f docker/Dockerfile.simple -t aspect-extraction . 2>/dev/null; then
+        echo "📦 Trying simple Dockerfile..."
+        if docker build -f docker/Dockerfile.simple -t aspect-extraction .; then
             echo "✅ Built with simple Dockerfile"
         else
             echo "❌ Both Dockerfiles failed. Check Docker installation and network."
+            echo "💡 Try running: scripts/run_native.sh $EXPERIMENT"
             exit 1
         fi
     fi

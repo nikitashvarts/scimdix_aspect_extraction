@@ -7,6 +7,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 # Build Docker image
 echo "🐳 Building Docker image..."
+echo "📦 This may take a few minutes on first run..."
 docker build -f docker/Dockerfile -t aspect-extraction .
 
 # Quick test (1 epoch, small batch)

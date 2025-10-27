@@ -403,7 +403,9 @@ class AspectExtractionTrainer:
         
         # Save model for this seed
         model_path = os.path.join(self.model_dir, f"model_seed_{seed}.pt")
+        logger.info(f"Saving model to: {model_path}")
         self.model.save_model(model_path)
+        logger.info(f"Model saved successfully for seed {seed}")
         
         return {
             'seed': seed,
@@ -443,10 +445,12 @@ class AspectExtractionTrainer:
         }
         
         results_path = os.path.join(self.output_dir, "results.json")
+        logger.info(f"Saving results to: {results_path}")
         with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
         logger.info(f"Multi-seed training completed. Results saved to {results_path}")
+        logger.info(f"Saved {len(all_results)} seed results with {len(aggregated_metrics)} metrics")
         
         return results
 

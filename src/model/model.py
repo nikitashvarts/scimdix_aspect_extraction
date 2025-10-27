@@ -148,6 +148,23 @@ class AspectExtractionModel(nn.Module):
         
         return encoder_params, head_params
     
+    def save_model(self, save_path: str):
+        """Save model to file (for trainer compatibility)."""
+        import os
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        # Save model state dict
+        torch.save({
+            'model_state_dict': self.state_dict(),
+            'model_name': self.model_name,
+            'num_labels': self.num_labels,
+            'config': self.config
+        }, save_path)
+        
+        print(f"Model saved to {save_path}")
+    
     def save_pretrained(self, save_directory: str):
         """Save model to directory."""
         import os
@@ -183,6 +200,23 @@ class AspectExtractionModel(nn.Module):
         model.load_state_dict(checkpoint['model_state_dict'])
         
         print(f"Model loaded from {model_directory}")
+        return model
+    
+    @classmethod
+    def load_model(cls, model_path: str):
+        """Load model from single file (for trainer compatibility)."""
+        checkpoint = torch.load(model_path, map_location='cpu')
+        
+        # Create model with saved configuration
+        model = cls(
+            model_name=checkpoint['model_name'],
+            num_labels=checkpoint['num_labels']
+        )
+        
+        # Load state dict
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        print(f"Model loaded from {model_path}")
         return model
 
 
