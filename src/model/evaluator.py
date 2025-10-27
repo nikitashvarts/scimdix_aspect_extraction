@@ -27,6 +27,30 @@ class SpanMetrics:
 
 
 @dataclass
+class PartialSpanMetrics:
+    """Metrics for partial span matching alongside exact matching."""
+    
+    exact_precision: float
+    exact_recall: float 
+    exact_f1: float
+    
+    partial_precision: float  # >=50% overlap + correct type
+    partial_recall: float
+    partial_f1: float
+    
+    overlap_precision: float  # Any overlap + correct type
+    overlap_recall: float
+    overlap_f1: float
+    
+    support: int
+    
+    def __str__(self) -> str:
+        return f"""Exact: P={self.exact_precision:.3f}, R={self.exact_recall:.3f}, F1={self.exact_f1:.3f}
+Partial: P={self.partial_precision:.3f}, R={self.partial_recall:.3f}, F1={self.partial_f1:.3f}
+Overlap: P={self.overlap_precision:.3f}, R={self.overlap_recall:.3f}, F1={self.overlap_f1:.3f}"""
+
+
+@dataclass
 class EntitySpan:
     """Represents an entity span."""
     
@@ -87,6 +111,12 @@ class SpanLevelEvaluator:
         spans = set()
         current_span_start = None
         current_span_label = None
+        
+        # Convert to lists if tensors
+        if hasattr(labels, 'tolist'):
+            labels = labels.tolist()
+        if attention_mask is not None and hasattr(attention_mask, 'tolist'):
+            attention_mask = attention_mask.tolist()
         
         # Apply attention mask if provided
         if attention_mask is not None:
@@ -174,6 +204,118 @@ class SpanLevelEvaluator:
         support = len(true_class_spans)
         
         return SpanMetrics(precision=precision, recall=recall, f1=f1, support=support)
+    
+    def spans_overlap(self, span1: EntitySpan, span2: EntitySpan) -> bool:
+        """Check if two spans have any overlap."""
+        return not (span1.end <= span2.start or span2.end <= span1.start)
+    
+    def spans_partial_match(self, true_span: EntitySpan, pred_span: EntitySpan, min_overlap: float = 0.5) -> bool:
+        """
+        Check if spans have significant overlap (>=50% by default) and same type.
+        
+        Args:
+            true_span: Ground truth span
+            pred_span: Predicted span  
+            min_overlap: Minimum overlap ratio (0.0 to 1.0)
+        """
+        if true_span.label != pred_span.label:
+            return False
+            
+        # Calculate overlap
+        overlap_start = max(true_span.start, pred_span.start)
+        overlap_end = min(true_span.end, pred_span.end)
+        
+        if overlap_start >= overlap_end:
+            return False  # No overlap
+            
+        overlap_len = overlap_end - overlap_start
+        true_len = true_span.end - true_span.start
+        pred_len = pred_span.end - pred_span.start
+        
+        # Calculate overlap ratio relative to the shorter span
+        min_len = min(true_len, pred_len)
+        overlap_ratio = overlap_len / min_len if min_len > 0 else 0.0
+        
+        return overlap_ratio >= min_overlap
+    
+    def calculate_partial_metrics_for_class(
+        self,
+        true_spans: Set[EntitySpan],
+        pred_spans: Set[EntitySpan],
+        aspect_class: str
+    ) -> PartialSpanMetrics:
+        """
+        Calculate partial matching metrics for a single class.
+        
+        Returns:
+        - Exact match (original strict matching)
+        - Partial match (>=50% overlap + correct type)  
+        - Overlap match (any overlap + correct type)
+        """
+        # Filter spans for this class
+        true_class_spans = {s for s in true_spans if s.label == aspect_class}
+        pred_class_spans = {s for s in pred_spans if s.label == aspect_class}
+        
+        if len(true_class_spans) == 0 and len(pred_class_spans) == 0:
+            return PartialSpanMetrics(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
+        
+        # 1. Exact matching (original strict)
+        exact_tp = len(true_class_spans & pred_class_spans)
+        exact_fp = len(pred_class_spans - true_class_spans)
+        exact_fn = len(true_class_spans - pred_class_spans)
+        
+        exact_precision = exact_tp / (exact_tp + exact_fp) if (exact_tp + exact_fp) > 0 else 0.0
+        exact_recall = exact_tp / (exact_tp + exact_fn) if (exact_tp + exact_fn) > 0 else 0.0
+        exact_f1 = 2 * exact_precision * exact_recall / (exact_precision + exact_recall) if (exact_precision + exact_recall) > 0 else 0.0
+        
+        # 2. Partial matching (>=50% overlap)
+        partial_matched_pred = set()
+        partial_matched_true = set()
+        
+        for pred_span in pred_class_spans:
+            for true_span in true_class_spans:
+                if self.spans_partial_match(true_span, pred_span, min_overlap=0.5):
+                    partial_matched_pred.add(pred_span)
+                    partial_matched_true.add(true_span)
+        
+        partial_tp = len(partial_matched_pred)
+        partial_fp = len(pred_class_spans - partial_matched_pred)
+        partial_fn = len(true_class_spans - partial_matched_true)
+        
+        partial_precision = partial_tp / (partial_tp + partial_fp) if (partial_tp + partial_fp) > 0 else 0.0
+        partial_recall = partial_tp / (partial_tp + partial_fn) if (partial_tp + partial_fn) > 0 else 0.0
+        partial_f1 = 2 * partial_precision * partial_recall / (partial_precision + partial_recall) if (partial_precision + partial_recall) > 0 else 0.0
+        
+        # 3. Overlap matching (any overlap)
+        overlap_matched_pred = set()
+        overlap_matched_true = set()
+        
+        for pred_span in pred_class_spans:
+            for true_span in true_class_spans:
+                if true_span.label == pred_span.label and self.spans_overlap(true_span, pred_span):
+                    overlap_matched_pred.add(pred_span)
+                    overlap_matched_true.add(true_span)
+        
+        overlap_tp = len(overlap_matched_pred)
+        overlap_fp = len(pred_class_spans - overlap_matched_pred)
+        overlap_fn = len(true_class_spans - overlap_matched_true)
+        
+        overlap_precision = overlap_tp / (overlap_tp + overlap_fp) if (overlap_tp + overlap_fp) > 0 else 0.0
+        overlap_recall = overlap_tp / (overlap_tp + overlap_fn) if (overlap_tp + overlap_fn) > 0 else 0.0
+        overlap_f1 = 2 * overlap_precision * overlap_recall / (overlap_precision + overlap_recall) if (overlap_precision + overlap_recall) > 0 else 0.0
+        
+        return PartialSpanMetrics(
+            exact_precision=exact_precision,
+            exact_recall=exact_recall,
+            exact_f1=exact_f1,
+            partial_precision=partial_precision,
+            partial_recall=partial_recall,
+            partial_f1=partial_f1,
+            overlap_precision=overlap_precision,
+            overlap_recall=overlap_recall,
+            overlap_f1=overlap_f1,
+            support=len(true_class_spans)
+        )
     
     def calculate_micro_metrics(
         self, 
@@ -354,9 +496,49 @@ class SpanLevelEvaluator:
                 all_true_spans, all_pred_spans, aspect_class
             )
         
+        # Calculate partial metrics for all classes
+        partial_class_metrics = {}
+        for aspect_class in self.aspect_classes:
+            # Combine all spans for this class across examples
+            all_true_spans = set()
+            all_pred_spans = set()
+            
+            for example_idx, (true_spans, pred_spans) in enumerate(zip(true_spans_list, pred_spans_list)):
+                # Add example index to make spans unique across examples
+                for span in true_spans:
+                    if span.label == aspect_class:
+                        all_true_spans.add(EntitySpan(
+                            span.start + example_idx * 10000,  # Offset by example
+                            span.end + example_idx * 10000,
+                            span.label
+                        ))
+                
+                for span in pred_spans:
+                    if span.label == aspect_class:
+                        all_pred_spans.add(EntitySpan(
+                            span.start + example_idx * 10000,
+                            span.end + example_idx * 10000,
+                            span.label
+                        ))
+            
+            partial_class_metrics[aspect_class] = self.calculate_partial_metrics_for_class(
+                all_true_spans, all_pred_spans, aspect_class
+            )
+        
         # Calculate micro and macro metrics
         micro_metrics = self.calculate_micro_metrics(true_spans_list, pred_spans_list)
         macro_metrics = self.calculate_macro_metrics(class_metrics)
+        
+        # Calculate aggregated partial metrics
+        partial_f1_scores = []
+        overlap_f1_scores = []
+        for class_name, metrics in partial_class_metrics.items():
+            if metrics.support > 0:  # Only include classes with true examples
+                partial_f1_scores.append(metrics.partial_f1)
+                overlap_f1_scores.append(metrics.overlap_f1)
+        
+        avg_partial_f1 = sum(partial_f1_scores) / len(partial_f1_scores) if partial_f1_scores else 0.0
+        avg_overlap_f1 = sum(overlap_f1_scores) / len(overlap_f1_scores) if overlap_f1_scores else 0.0
         
         # Create confusion matrix
         confusion_matrix = self.create_confusion_matrix(true_spans_list, pred_spans_list)
@@ -364,12 +546,19 @@ class SpanLevelEvaluator:
         # Prepare results
         results = {
             'class_metrics': class_metrics,
+            'partial_class_metrics': partial_class_metrics,  # NEW: Partial metrics
             'micro_avg': micro_metrics,
             'macro_avg': macro_metrics,
             'confusion_matrix': confusion_matrix,
             'num_examples': len(true_labels_list),
             'total_true_spans': sum(len(spans) for spans in true_spans_list),
-            'total_pred_spans': sum(len(spans) for spans in pred_spans_list)
+            'total_pred_spans': sum(len(spans) for spans in pred_spans_list),
+            # Add trainer-compatible keys
+            'test_micro_f1': micro_metrics.f1,
+            'test_macro_f1': macro_metrics.f1,
+            # Add aggregated partial metrics
+            'avg_partial_f1': avg_partial_f1,
+            'avg_overlap_f1': avg_overlap_f1
         }
         
         return results
@@ -401,6 +590,27 @@ class SpanLevelEvaluator:
               f"{micro.f1:<10.3f} {micro.support:<10}")
         print(f"{'macro avg':<12} {macro.precision:<10.3f} {macro.recall:<10.3f} "
               f"{macro.f1:<10.3f} {macro.support:<10}")
+        
+        # Add partial metrics section
+        if 'partial_class_metrics' in results:
+            print("\n" + "="*60)
+            print("PARTIAL MATCHING METRICS")
+            print("="*60)
+            print("Legend:")
+            print("  Exact: Perfect boundary and type match")
+            print("  Partial: >=50% overlap + correct type")
+            print("  Overlap: Any overlap + correct type")
+            print()
+            
+            for class_name in sorted(results['partial_class_metrics'].keys()):
+                metrics = results['partial_class_metrics'][class_name]
+                if metrics.support > 0:  # Only show classes that have true examples
+                    print(f"Class: {class_name}")
+                    print(f"  Exact:   P={metrics.exact_precision:.3f}, R={metrics.exact_recall:.3f}, F1={metrics.exact_f1:.3f}")
+                    print(f"  Partial: P={metrics.partial_precision:.3f}, R={metrics.partial_recall:.3f}, F1={metrics.partial_f1:.3f}")
+                    print(f"  Overlap: P={metrics.overlap_precision:.3f}, R={metrics.overlap_recall:.3f}, F1={metrics.overlap_f1:.3f}")
+                    print(f"  Support: {metrics.support}")
+                    print()
         
         print("\nConfusion Matrix (True vs Predicted):")
         confusion = results['confusion_matrix']

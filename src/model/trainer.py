@@ -365,6 +365,27 @@ class AspectExtractionTrainer:
         logger.info(f"  Micro Recall: {micro_recall:.4f}")
         logger.info(f"  Samples: {len(all_predictions)}")
         
+        # Add partial metrics logging
+        if 'partial_class_metrics' in eval_results:
+            logger.info("  Partial Matching Summary:")
+            partial_f1_scores = []
+            overlap_f1_scores = []
+            
+            for aspect_class in self.evaluator.aspect_classes:
+                if aspect_class in eval_results['partial_class_metrics']:
+                    # Check support in traditional metrics
+                    traditional_metrics = eval_results['class_metrics'].get(aspect_class)
+                    if traditional_metrics and hasattr(traditional_metrics, 'support') and traditional_metrics.support > 0:
+                        partial_metrics = eval_results['partial_class_metrics'][aspect_class]
+                        partial_f1_scores.append(partial_metrics.partial_f1)
+                        overlap_f1_scores.append(partial_metrics.overlap_f1)
+            
+            if partial_f1_scores:
+                avg_partial_f1 = sum(partial_f1_scores) / len(partial_f1_scores)
+                avg_overlap_f1 = sum(overlap_f1_scores) / len(overlap_f1_scores)
+                logger.info(f"    Avg Partial F1 (>=50% overlap): {avg_partial_f1:.4f}")
+                logger.info(f"    Avg Overlap F1 (any overlap): {avg_overlap_f1:.4f}")
+        
         return metrics
     
     def train_single_seed(self, seed: int) -> Dict[str, Any]:
