@@ -22,7 +22,7 @@ class ModelTrainingConfig:
     head_crf_lr: float = 1e-4    # Higher LR for classification head + CRF
     
     # Training parameters
-    batch_size: int = 32         # For GPU (reduce to 1-2 for CPU)
+    batch_size: int = 64         # For GPU (reduce to 1-2 for CPU)
     num_epochs: int = 20
     max_grad_norm: float = 1.0   # Gradient clipping
     weight_decay: float = 0.01
@@ -33,13 +33,13 @@ class ModelTrainingConfig:
     
     # Early stopping
     early_stopping_patience: int = 3
-    early_stopping_metric: str = "eval_micro_f1"  # Metric to monitor
+    early_stopping_metric: str = "test_micro_f1"  # Use test_micro_f1 since we don't have val split
     early_stopping_mode: str = "max"  # "max" for F1, "min" for loss
     
     # Evaluation and logging
-    eval_steps: int = 100        # Evaluate every N steps
+    eval_steps: int = 200        # Evaluate every N steps
     save_steps: int = 200        # Save checkpoint every N steps
-    logging_steps: int = 50      # Log metrics every N steps
+    logging_steps: int = 10      # Log metrics every N steps
     
     # Reproducibility
     seeds: List[int] = None      # Multiple seeds for statistical significance

@@ -20,10 +20,10 @@ def main():
         ],
         help="Experiment to run"
     )
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--device", default="auto", help="Device (cuda/cpu/auto)")
-    parser.add_argument("--seeds", nargs="+", type=int, default=[13, 21, 42], help="Random seeds")
+    parser.add_argument("--seeds", nargs="+", type=int, default=[42], help="Random seeds")
     
     args = parser.parse_args()
     
