@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  aspect-extraction:
+    build: .
+    container_name: aspect-extraction-gpu
+    volumes:
+      # Mount results directory to save outputs on host
+      - ./results:/app/results
+      # Mount datasets if you want to update them
+      - ./datasets:/app/datasets
+    environment:
+      - CUDA_VISIBLE_DEVICES=1  # Use second GPU (GPU=1)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Default command can be overridden
+    command: python3 run_experiment.py test
