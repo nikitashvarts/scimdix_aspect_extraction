@@ -6,8 +6,6 @@ This project implements XLM-RoBERTa + CRF model for aspect extraction in scienti
 
 ## 🎯 Research Goal
 
-> "Основная цель - решить поставленную задачу для научных текстов на казахском языке"
-
 Transfer learning approach to extract scientific aspects (AIM, METHOD, MATERIAL, TASK, TOOL, RESULT, USAGE) from Kazakh scientific texts using Russian training data.
 
 ## 🚀 Quick Start
@@ -150,7 +148,7 @@ If you use this code in your research, please cite:
 
 ## 📧 Contact
 
-For questions about the research or implementation, please open an issue or contact [your email].
+For questions about the research or implementation, please open an issue or contact us.
 
 ---
 
