@@ -356,6 +356,14 @@ class AspectExtractionTrainer:
             f'{split_name}_samples': len(all_predictions)
         }
         
+        # Add partial metrics to results if available
+        try:
+            if 'avg_partial_f1' in eval_results and 'avg_overlap_f1' in eval_results:
+                metrics[f'{split_name}_avg_partial_f1'] = eval_results['avg_partial_f1']
+                metrics[f'{split_name}_avg_overlap_f1'] = eval_results['avg_overlap_f1']
+        except Exception as e:
+            logger.warning(f"Failed to add partial metrics to results: {e}")
+        
         # Detailed logging of evaluation results
         logger.info(f"{split_name.upper()} Results:")
         logger.info(f"  Loss: {avg_loss:.4f}")
@@ -364,6 +372,14 @@ class AspectExtractionTrainer:
         logger.info(f"  Micro Precision: {micro_precision:.4f}")
         logger.info(f"  Micro Recall: {micro_recall:.4f}")
         logger.info(f"  Samples: {len(all_predictions)}")
+        
+        # Add aggregated partial metrics logging
+        try:
+            if 'avg_partial_f1' in eval_results and 'avg_overlap_f1' in eval_results:
+                logger.info(f"  Avg Partial F1 (>=50% overlap): {eval_results['avg_partial_f1']:.4f}")
+                logger.info(f"  Avg Overlap F1 (any overlap): {eval_results['avg_overlap_f1']:.4f}")
+        except Exception as e:
+            logger.warning(f"Failed to log aggregated partial metrics: {e}")
         
         # Add partial metrics logging
         if 'partial_class_metrics' in eval_results:
