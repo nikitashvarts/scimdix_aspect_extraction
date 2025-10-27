@@ -41,22 +41,14 @@ def test_data_preparation():
         assert len(df) == 1, "CSV should contain 1 row"
         print("   ✅ CSV parsing works correctly")
         
-        # Test aspect extraction from annotation
-        print("\n3. Testing aspect extraction from annotation...")
-        annotation = test_data['aspect_annotation'][0]
-        aspects1 = preparator.extract_aspects_from_annotation(annotation)
-        print(f"   Found aspects: {aspects1}")
-        assert len(aspects1) == 2, "Should extract 2 aspects from annotation"
-        assert ('извлечения аспектов', 'TASK') in aspects1
-        assert ('метод машинного обучения', 'METHOD') in aspects1
-        print("   ✅ Aspect extraction from annotation works correctly")
-        
-        # Test aspect extraction from column
-        print("\n4. Testing aspect extraction from aspects column...")
+        # Test aspect extraction from column (now the only source)
+        print("\n3. Testing aspect extraction from aspects column...")
         aspects_text = test_data['aspects'][0]
-        aspects2 = preparator.extract_aspects_from_column(aspects_text)
-        print(f"   Found aspects: {aspects2}")
-        assert len(aspects2) == 2, "Should extract 2 aspects from column"
+        aspects = preparator.extract_aspects_from_column(aspects_text)
+        print(f"   Found aspects: {aspects}")
+        assert len(aspects) == 2, "Should extract 2 aspects from column"
+        assert ('извлечения аспектов', 'TASK') in aspects
+        assert ('метод машинного обучения', 'METHOD') in aspects
         print("   ✅ Aspect extraction from column works correctly")
         
         # Test tokenization
@@ -68,9 +60,9 @@ def test_data_preparation():
         print("   ✅ Tokenization works correctly")
         
         # Test BIO tagging
-        print("\n6. Testing BIO tagging...")
-        all_aspects = list(set(aspects1 + aspects2))
-        tokens, bio_tags = preparator.align_aspects_with_tokens(text, all_aspects)
+        print("\n4. Testing BIO tagging...")
+        text = test_data['abstract'][0]
+        tokens, bio_tags = preparator.align_aspects_with_tokens(text, aspects)
         print(f"   Tokens: {len(tokens)}, BIO tags: {len(bio_tags)}")
         print(f"   Sample tags: {bio_tags[:10]}")
         assert len(tokens) == len(bio_tags), "Number of tokens should equal number of BIO tags"
@@ -82,13 +74,13 @@ def test_data_preparation():
         print("   ✅ BIO tagging works correctly")
         
         # Test file processing
-        print("\n7. Testing file processing...")
+        print("\n5. Testing file processing...")
         tokens_and_tags = preparator.process_domain_file(temp_csv_path, "ru")
         assert len(tokens_and_tags) == 1, "Should process 1 sentence"
         print("   ✅ File processing works correctly")
         
         # Test CoNLL file saving
-        print("\n8. Testing CoNLL file saving...")
+        print("\n6. Testing CoNLL file saving...")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.conll', delete=False) as f:
             temp_conll_path = Path(f.name)
         
@@ -106,7 +98,7 @@ def test_data_preparation():
         print("   ✅ CoNLL file saving works correctly")
         
         # Show sample output
-        print("\n9. Sample CoNLL output:")
+        print("\n7. Sample CoNLL output:")
         with open(temp_conll_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()[:10]  # First 10 lines
             for line in lines:

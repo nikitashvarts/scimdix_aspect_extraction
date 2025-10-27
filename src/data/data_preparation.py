@@ -6,7 +6,7 @@ Simple and straightforward implementation for converting raw CSV data to CoNLL f
 import pandas as pd
 import re
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 from transformers import AutoTokenizer
 
 from src.config import config, setup_directories
@@ -23,18 +23,6 @@ class DataPreparator:
     def parse_csv_file(self, file_path: Path) -> pd.DataFrame:
         """Load CSV file and return DataFrame."""
         return pd.read_csv(file_path)
-    
-    def extract_aspects_from_annotation(self, annotation: str) -> List[Tuple[str, str]]:
-        """Extract aspects from annotation column using regex pattern [text|F1|CATEGORY]."""
-        aspects = []
-        pattern = config.ANNOTATION_PATTERN
-        
-        for match in re.finditer(pattern, annotation):
-            text = match.group(1).strip()
-            category = match.group(3).strip()
-            aspects.append((text, category))
-        
-        return aspects
     
     def extract_aspects_from_column(self, aspects_text: str) -> List[Tuple[str, str]]:
         """Extract aspects from aspects column using pattern 'F1 CATEGORY text'."""
@@ -59,54 +47,55 @@ class DataPreparator:
         tokens = self.tokenizer.tokenize(text)
         return tokens
     
-    def align_aspects_with_tokens(self, text: str, aspects: List[Tuple[str, str]]) -> List[str]:
-        """Create BIO tags for tokenized text."""
+    def align_aspects_with_tokens(self, text: str, aspects: List[Tuple[str, str]]) -> Tuple[List[str], List[str]]:
+        """Create BIO tags for tokenized text - simple and robust approach."""
         tokens = self.tokenize_text(text)
         bio_tags = ['O'] * len(tokens)
         
-        # Simple word-based alignment
-        text_lower = text.lower()
+        # Reconstruct text from tokens for alignment
+        reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
+        original_text = text.lower()
         
         for aspect_text, category in aspects:
-            aspect_lower = aspect_text.lower()
-            
-            # Find aspect in original text
-            start_idx = text_lower.find(aspect_lower)
-            if start_idx == -1:
+            aspect_text = aspect_text.strip().lower()
+            if not aspect_text:
                 continue
             
-            # Find corresponding tokens
-            char_to_token = self._create_char_to_token_mapping(text, tokens)
+            # Find aspect in original text
+            start_pos = original_text.find(aspect_text)
+            if start_pos == -1:
+                continue
             
-            aspect_start_token = char_to_token.get(start_idx)
-            aspect_end_token = char_to_token.get(start_idx + len(aspect_text) - 1)
+            # Find corresponding position in reconstructed text
+            recon_start = reconstructed_text.find(aspect_text)
+            if recon_start == -1:
+                continue
+                
+            # Find tokens that correspond to this aspect
+            char_pos = 0
+            aspect_tokens = []
             
-            if aspect_start_token is not None and aspect_end_token is not None:
-                # Apply BIO tagging
-                bio_tags[aspect_start_token] = f'B-{category}'
-                for i in range(aspect_start_token + 1, aspect_end_token + 1):
-                    if i < len(bio_tags):
-                        bio_tags[i] = f'I-{category}'
+            for i, token in enumerate(tokens):
+                token_text = token.replace('▁', ' ').strip()
+                if not token_text:
+                    continue
+                    
+                token_start = char_pos
+                token_end = char_pos + len(token_text)
+                
+                # Check if token overlaps with aspect
+                if not (token_end <= recon_start or token_start >= recon_start + len(aspect_text)):
+                    aspect_tokens.append(i)
+                
+                char_pos = token_end + 1  # +1 for potential space
+            
+            # Apply BIO tagging
+            if aspect_tokens:
+                bio_tags[aspect_tokens[0]] = f'B-{category}'
+                for token_idx in aspect_tokens[1:]:
+                    bio_tags[token_idx] = f'I-{category}'
         
         return tokens, bio_tags
-    
-    def _create_char_to_token_mapping(self, text: str, tokens: List[str]) -> Dict[int, int]:
-        """Create mapping from character positions to token indices."""
-        char_to_token = {}
-        current_pos = 0
-        
-        for token_idx, token in enumerate(tokens):
-            # Remove special tokenizer symbols
-            clean_token = token.replace('▁', ' ').replace('##', '')
-            
-            # Find token in text starting from current position
-            token_start = text.lower().find(clean_token.lower(), current_pos)
-            if token_start != -1:
-                for char_pos in range(token_start, token_start + len(clean_token)):
-                    char_to_token[char_pos] = token_idx
-                current_pos = token_start + len(clean_token)
-        
-        return char_to_token
     
     def save_conll_file(self, tokens_and_tags: List[Tuple[List[str], List[str]]], output_path: Path):
         """Save tokens and BIO tags to CoNLL format file."""
@@ -127,20 +116,24 @@ class DataPreparator:
         
         for _, row in df.iterrows():
             text = row['abstract']
-            annotation = row['aspect_annotation']
             aspects_column = row['aspects']
             
-            # Extract aspects from both sources
-            aspects1 = self.extract_aspects_from_annotation(annotation)
-            aspects2 = self.extract_aspects_from_column(aspects_column)
+            # Extract aspects only from aspects column (ignore aspect_annotation)
+            aspects = self.extract_aspects_from_column(aspects_column)
             
-            # Combine and deduplicate aspects
-            all_aspects = list(set(aspects1 + aspects2))
+            if not aspects:
+                print("  Warning: No aspects found in row")
+                continue
             
             # Tokenize and align
-            tokens, bio_tags = self.align_aspects_with_tokens(text, all_aspects)
+            tokens, bio_tags = self.align_aspects_with_tokens(text, aspects)
             tokens_and_tags.append((tokens, bio_tags))
+            
+            # Debug info for first few sentences
+            if len(tokens_and_tags) <= 3:
+                print(f"  Found {len(aspects)} aspects: {[cat for _, cat in aspects]}")
         
+        print(f"  Processed {len(tokens_and_tags)} sentences")
         return tokens_and_tags
     
     def process_language(self, language: str):
