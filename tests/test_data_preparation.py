@@ -15,12 +15,12 @@ def test_data_preparation():
     
     print("=== Testing Data Preparation Module ===")
     
-    # Create test data
+    # Create test data with multiple sentences
     test_data = {
         'filename': ['test-1-ru.txt'],
-        'abstract': ['Это тестовый текст для проверки извлечения аспектов. Мы используем метод машинного обучения.'],
-        'aspect_annotation': ['Это тестовый текст для проверки [извлечения аспектов|F1|TASK]. Мы используем [метод машинного обучения|F2|METHOD].'],
-        'aspects': ['F1 TASK извлечения аспектов\nF2 METHOD метод машинного обучения']
+        'abstract': ['Это тестовый текст для проверки извлечения аспектов. Мы используем метод машинного обучения. Результаты показывают хорошую точность.'],
+        'aspect_annotation': ['...'],  # Not used anymore
+        'aspects': ['F1 TASK извлечения аспектов\nF2 METHOD метод машинного обучения\nF3 RESULT Результаты показывают хорошую точность']
     }
     
     # Create temporary CSV file
@@ -41,14 +41,25 @@ def test_data_preparation():
         assert len(df) == 1, "CSV should contain 1 row"
         print("   ✅ CSV parsing works correctly")
         
+        # Test sentence splitting
+        print("\n3. Testing sentence splitting...")
+        text = test_data['abstract'][0]
+        sentences = preparator.split_into_sentences(text)
+        print(f"   Original text split into {len(sentences)} sentences:")
+        for i, sent in enumerate(sentences):
+            print(f"     {i+1}: {sent}")
+        assert len(sentences) >= 2, "Should split into multiple sentences"
+        print("   ✅ Sentence splitting works correctly")
+        
         # Test aspect extraction from column (now the only source)
-        print("\n3. Testing aspect extraction from aspects column...")
+        print("\n4. Testing aspect extraction from aspects column...")
         aspects_text = test_data['aspects'][0]
         aspects = preparator.extract_aspects_from_column(aspects_text)
         print(f"   Found aspects: {aspects}")
-        assert len(aspects) == 2, "Should extract 2 aspects from column"
+        assert len(aspects) == 3, "Should extract 3 aspects from column"
         assert ('извлечения аспектов', 'TASK') in aspects
         assert ('метод машинного обучения', 'METHOD') in aspects
+        assert ('Результаты показывают хорошую точность', 'RESULT') in aspects
         print("   ✅ Aspect extraction from column works correctly")
         
         # Test tokenization
@@ -59,28 +70,38 @@ def test_data_preparation():
         assert len(tokens) > 0, "Should generate tokens"
         print("   ✅ Tokenization works correctly")
         
-        # Test BIO tagging
-        print("\n4. Testing BIO tagging...")
-        text = test_data['abstract'][0]
-        tokens, bio_tags = preparator.align_aspects_with_tokens(text, aspects)
-        print(f"   Tokens: {len(tokens)}, BIO tags: {len(bio_tags)}")
-        print(f"   Sample tags: {bio_tags[:10]}")
-        assert len(tokens) == len(bio_tags), "Number of tokens should equal number of BIO tags"
+        # Test sentence-level BIO tagging
+        print("\n6. Testing sentence-level BIO tagging...")
+        sentences = preparator.split_into_sentences(text)
+        sentence_data = preparator.align_aspects_with_sentences(sentences, aspects)
+        print(f"   Processed {len(sentences)} sentences → {len(sentence_data)} sentence data")
         
-        # Check that we have some B- and I- tags
-        has_b_tags = any(tag.startswith('B-') for tag in bio_tags)
-        has_i_tags = any(tag.startswith('I-') for tag in bio_tags)
-        print(f"   Has B- tags: {has_b_tags}, Has I- tags: {has_i_tags}")
-        print("   ✅ BIO tagging works correctly")
+        # Check first sentence
+        if sentence_data:
+            tokens, bio_tags = sentence_data[0]
+            print(f"   First sentence: {len(tokens)} tokens, {len(bio_tags)} tags")
+            print(f"   Sample tokens: {tokens[:5]}")
+            print(f"   Sample tags: {bio_tags[:5]}")
+            assert len(tokens) == len(bio_tags), "Number of tokens should equal number of BIO tags"
+            
+            # Check that we have some B- and I- tags across all sentences
+            all_tags = []
+            for _, tags in sentence_data:
+                all_tags.extend(tags)
+            has_b_tags = any(tag.startswith('B-') for tag in all_tags)
+            print(f"   Has B- tags across sentences: {has_b_tags}")
+        
+        print("   ✅ Sentence-level BIO tagging works correctly")
         
         # Test file processing
-        print("\n5. Testing file processing...")
+        print("\n7. Testing file processing...")
         tokens_and_tags = preparator.process_domain_file(temp_csv_path, "ru")
-        assert len(tokens_and_tags) == 1, "Should process 1 sentence"
+        print(f"   Processed file resulted in {len(tokens_and_tags)} sentences")
+        assert len(tokens_and_tags) >= 1, "Should process at least 1 sentence"
         print("   ✅ File processing works correctly")
         
         # Test CoNLL file saving
-        print("\n6. Testing CoNLL file saving...")
+        print("\n8. Testing CoNLL file saving...")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.conll', delete=False) as f:
             temp_conll_path = Path(f.name)
         
@@ -98,7 +119,7 @@ def test_data_preparation():
         print("   ✅ CoNLL file saving works correctly")
         
         # Show sample output
-        print("\n7. Sample CoNLL output:")
+        print("\n9. Sample CoNLL output:")
         with open(temp_conll_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()[:10]  # First 10 lines
             for line in lines:

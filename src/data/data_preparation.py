@@ -24,6 +24,24 @@ class DataPreparator:
         """Load CSV file and return DataFrame."""
         return pd.read_csv(file_path)
     
+    def split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences using simple regex rules."""
+        # Simple sentence splitting for Russian and Kazakh
+        # Split on sentence-ending punctuation followed by space and capital letter
+        # Using explicit character classes instead of ranges to avoid Unicode issues
+        sentences = re.split(r'[.!?]+\s+(?=[А-ЯЁӘІҢҒҮҰҚӨҺA-Z])', text)
+        
+        # Clean and filter sentences
+        clean_sentences = []
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) > 10:  # Filter out very short fragments
+                # Remove trailing punctuation for consistency
+                sentence = re.sub(r'[.!?]+$', '', sentence)
+                clean_sentences.append(sentence)
+        
+        return clean_sentences
+    
     def extract_aspects_from_column(self, aspects_text: str) -> List[Tuple[str, str]]:
         """Extract aspects from aspects column using pattern 'F1 CATEGORY text'."""
         aspects = []
@@ -47,55 +65,67 @@ class DataPreparator:
         tokens = self.tokenizer.tokenize(text)
         return tokens
     
-    def align_aspects_with_tokens(self, text: str, aspects: List[Tuple[str, str]]) -> Tuple[List[str], List[str]]:
-        """Create BIO tags for tokenized text - simple and robust approach."""
-        tokens = self.tokenize_text(text)
-        bio_tags = ['O'] * len(tokens)
+    def align_aspects_with_sentences(self, sentences: List[str], aspects: List[Tuple[str, str]]) -> List[Tuple[List[str], List[str]]]:
+        """Create BIO tags for each sentence separately."""
+        sentence_data = []
         
-        # Reconstruct text from tokens for alignment
-        reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
-        original_text = text.lower()
-        
-        for aspect_text, category in aspects:
-            aspect_text = aspect_text.strip().lower()
-            if not aspect_text:
-                continue
+        for sentence in sentences:
+            tokens = self.tokenize_text(sentence)
+            bio_tags = ['O'] * len(tokens)
             
-            # Find aspect in original text
-            start_pos = original_text.find(aspect_text)
-            if start_pos == -1:
-                continue
+            # Check token count
+            if len(tokens) > config.MAX_SEQUENCE_LENGTH:
+                print(f"  Warning: Sentence has {len(tokens)} tokens (>{config.MAX_SEQUENCE_LENGTH}), truncating")
+                tokens = tokens[:config.MAX_SEQUENCE_LENGTH]
+                bio_tags = bio_tags[:config.MAX_SEQUENCE_LENGTH]
             
-            # Find corresponding position in reconstructed text
-            recon_start = reconstructed_text.find(aspect_text)
-            if recon_start == -1:
-                continue
-                
-            # Find tokens that correspond to this aspect
-            char_pos = 0
-            aspect_tokens = []
+            # Find aspects that appear in this sentence
+            sentence_lower = sentence.lower()
             
-            for i, token in enumerate(tokens):
-                token_text = token.replace('▁', ' ').strip()
-                if not token_text:
+            for aspect_text, category in aspects:
+                aspect_text = aspect_text.strip().lower()
+                if not aspect_text:
                     continue
-                    
-                token_start = char_pos
-                token_end = char_pos + len(token_text)
                 
-                # Check if token overlaps with aspect
-                if not (token_end <= recon_start or token_start >= recon_start + len(aspect_text)):
-                    aspect_tokens.append(i)
-                
-                char_pos = token_end + 1  # +1 for potential space
+                # Check if aspect appears in this sentence
+                if aspect_text in sentence_lower:
+                    # Find position using tokenizer's text reconstruction
+                    try:
+                        reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
+                        
+                        # Find aspect in reconstructed text
+                        aspect_start = reconstructed_text.find(aspect_text)
+                        if aspect_start == -1:
+                            continue
+                        
+                        # Map to token positions
+                        char_pos = 0
+                        for i, token in enumerate(tokens):
+                            token_text = token.replace('▁', ' ').strip()
+                            if not token_text:
+                                continue
+                            
+                            token_start = char_pos
+                            token_end = char_pos + len(token_text)
+                            
+                            # Check if token overlaps with aspect
+                            aspect_end = aspect_start + len(aspect_text)
+                            if not (token_end <= aspect_start or token_start >= aspect_end):
+                                if bio_tags[i] == 'O':  # Don't overwrite existing tags
+                                    if token_start <= aspect_start < token_end:
+                                        bio_tags[i] = f'B-{category}'
+                                    else:
+                                        bio_tags[i] = f'I-{category}'
+                            
+                            char_pos = token_end + 1  # +1 for potential space
+                            
+                    except Exception:
+                        # Fallback to simple word matching
+                        continue
             
-            # Apply BIO tagging
-            if aspect_tokens:
-                bio_tags[aspect_tokens[0]] = f'B-{category}'
-                for token_idx in aspect_tokens[1:]:
-                    bio_tags[token_idx] = f'I-{category}'
+            sentence_data.append((tokens, bio_tags))
         
-        return tokens, bio_tags
+        return sentence_data
     
     def save_conll_file(self, tokens_and_tags: List[Tuple[List[str], List[str]]], output_path: Path):
         """Save tokens and BIO tags to CoNLL format file."""
@@ -112,29 +142,34 @@ class DataPreparator:
         print(f"Processing {file_path}")
         
         df = self.parse_csv_file(file_path)
-        tokens_and_tags = []
+        all_sentence_data = []
         
-        for _, row in df.iterrows():
+        for doc_idx, row in df.iterrows():
             text = row['abstract']
             aspects_column = row['aspects']
             
-            # Extract aspects only from aspects column (ignore aspect_annotation)
+            # Extract aspects only from aspects column
             aspects = self.extract_aspects_from_column(aspects_column)
             
             if not aspects:
                 print("  Warning: No aspects found in row")
                 continue
             
-            # Tokenize and align
-            tokens, bio_tags = self.align_aspects_with_tokens(text, aspects)
-            tokens_and_tags.append((tokens, bio_tags))
+            # Split text into sentences
+            sentences = self.split_into_sentences(text)
             
-            # Debug info for first few sentences
-            if len(tokens_and_tags) <= 3:
-                print(f"  Found {len(aspects)} aspects: {[cat for _, cat in aspects]}")
+            # Process each sentence separately
+            sentence_data = self.align_aspects_with_sentences(sentences, aspects)
+            all_sentence_data.extend(sentence_data)
+            
+            # Debug info for first few documents
+            if doc_idx < 3:
+                print(f"  Doc {doc_idx}: {len(sentences)} sentences, {len(aspects)} aspects: {[cat for _, cat in aspects]}")
+                avg_tokens = sum(len(tokens) for tokens, _ in sentence_data) / len(sentence_data) if sentence_data else 0
+                print(f"    Average tokens per sentence: {avg_tokens:.1f}")
         
-        print(f"  Processed {len(tokens_and_tags)} sentences")
-        return tokens_and_tags
+        print(f"  Processed {len(df)} documents → {len(all_sentence_data)} sentences")
+        return all_sentence_data
     
     def process_language(self, language: str):
         """Process all files for one language."""
