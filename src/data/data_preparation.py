@@ -65,7 +65,7 @@ class DataPreparator:
                 sentences = []
                 for sentence in doc.sentences:
                     sent_text = sentence.text.strip()
-                    if len(sent_text) > 10:  # Filter out very short fragments
+                    if len(sent_text) > 10:  # Filter out very short fragments  # TODO: make parameter
                         sentences.append(sent_text)
                 
                 return sentences
@@ -132,41 +132,46 @@ class DataPreparator:
                 bio_tags = bio_tags[:config.MAX_SEQUENCE_LENGTH]
             
             # Find aspects that appear in this sentence
-            sentence_lower = sentence.lower()
-            
             for aspect_text, category in aspects:
-                aspect_text = aspect_text.strip().lower()
+                # aspect_text = aspect_text.strip().lower()  # Assume that aspect texts are aligned with initial sentence
                 if not aspect_text:
                     continue
                 
                 # Check if aspect appears in this sentence
-                if aspect_text in sentence_lower:
+                begin_tag_set = False
+                if aspect_text in sentence:
                     # Find position using tokenizer's text reconstruction
                     try:
-                        reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
+                        # reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
                         
                         # Find aspect in reconstructed text
-                        aspect_start = reconstructed_text.find(aspect_text)
+                        aspect_start = sentence.find(aspect_text)
                         if aspect_start == -1:
-                            continue
-                        
+                            continue  # TODO: track unmatched aspects as errors
+                        aspect_end = aspect_start + len(aspect_text)
+
                         # Map to token positions
                         char_pos = 0
                         for i, token in enumerate(tokens):
-                            token_text = token.replace('▁', ' ').strip()
-                            if not token_text:
-                                continue
+                            
+                            if token[0] != '▁':
+                                token_text = token[:]
+                                char_pos -= 1  # Adjust for subword tokens
+                            else:
+                                token_text = token[1:]
                             
                             token_start = char_pos
                             token_end = char_pos + len(token_text)
                             
                             # Check if token overlaps with aspect
-                            aspect_end = aspect_start + len(aspect_text)
                             if not (token_end <= aspect_start or token_start >= aspect_end):
                                 if bio_tags[i] == 'O':  # Don't overwrite existing tags
                                     if token_start <= aspect_start < token_end:
+                                        begin_tag_set = True
                                         bio_tags[i] = f'B-{category}'
                                     else:
+                                        if not begin_tag_set:
+                                            break  # TODO: log error: aspect not aligned properly
                                         bio_tags[i] = f'I-{category}'
                             
                             char_pos = token_end + 1  # +1 for potential space
