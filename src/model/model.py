@@ -24,7 +24,7 @@ class AspectExtractionModel(nn.Module):
     
     def __init__(
         self,
-        model_name: str = "xlm-roberta-base",
+        model_name: str = "xlm-roberta-large",
         num_labels: int = 15,  # 7 aspects × 2 (B-/I-) + O
         dropout_rate: float = 0.1,
         freeze_encoder: bool = False

@@ -382,7 +382,7 @@ if __name__ == "__main__":
     from src.model.model import create_label_mapping
     
     # Initialize tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
+    tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-large")
     
     # Create label mapping
     label_to_id, id_to_label = create_label_mapping()

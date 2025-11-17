@@ -120,7 +120,8 @@ class DataPreparator:
     def align_aspects_with_sentences(self, sentences: List[str], aspects: List[Tuple[str, str]]) -> List[Tuple[List[str], List[str]]]:
         """Create BIO tags for each sentence separately."""
         sentence_data = []
-        
+
+        marked_aspects_indexes = set()
         for sentence in sentences:
             tokens = self.tokenize_text(sentence)
             bio_tags = ['O'] * len(tokens)
@@ -132,18 +133,23 @@ class DataPreparator:
                 bio_tags = bio_tags[:config.MAX_SEQUENCE_LENGTH]
             
             # Find aspects that appear in this sentence
-            for aspect_text, category in aspects:
+            for aspect_idx, (aspect_text, category) in enumerate(aspects):
                 # aspect_text = aspect_text.strip().lower()  # Assume that aspect texts are aligned with initial sentence
                 if not aspect_text:
                     continue
-                
+
+                if aspect_idx in marked_aspects_indexes:
+                    continue  # Already marked this aspect in previous sentences
+
                 # Check if aspect appears in this sentence
-                begin_tag_set = False
+                begin_tag_set_flag = False
                 if aspect_text in sentence:
                     # Find position using tokenizer's text reconstruction
                     try:
                         # reconstructed_text = self.tokenizer.convert_tokens_to_string(tokens).lower()
                         
+                        aspect_text_tokenized = self.tokenizer.tokenize(aspect_text)
+
                         # Find aspect in reconstructed text
                         aspect_start = sentence.find(aspect_text)
                         if aspect_start == -1:
@@ -152,6 +158,7 @@ class DataPreparator:
 
                         # Map to token positions
                         char_pos = 0
+                        aspect_token_count = 0
                         for i, token in enumerate(tokens):
                             
                             if token[0] != '▁':
@@ -164,24 +171,42 @@ class DataPreparator:
                             token_end = char_pos + len(token_text)
                             
                             # Check if token overlaps with aspect
-                            if not (token_end <= aspect_start or token_start >= aspect_end):
+                            if not (token_end < aspect_start or token_start >= aspect_end):
                                 if bio_tags[i] == 'O':  # Don't overwrite existing tags
-                                    if token_start <= aspect_start < token_end:
-                                        begin_tag_set = True
+                                    if token_start == aspect_start:
+                                        begin_tag_set_flag = True
                                         bio_tags[i] = f'B-{category}'
+                                        aspect_token_count += 1
                                     else:
-                                        if not begin_tag_set:
+                                        if not begin_tag_set_flag:
+                                            print(f"    ⚠️  Aspect '{aspect_text}' not aligned properly in sentence '{sentence}'")
                                             break  # TODO: log error: aspect not aligned properly
                                         bio_tags[i] = f'I-{category}'
+                                        aspect_token_count += 1
+                                else:
+                                    print(f"    ⚠️  Overlapping aspect tags for '{aspect_text}' in sentence '{sentence}'")
+                                    break
                             
                             char_pos = token_end + 1  # +1 for potential space
-                            
+                        
+                        else:
+                            if aspect_token_count != len(aspect_text_tokenized):
+                                # Mismatch in token counts, likely due to tokenization differences
+                                # Log warning and skip this aspect
+                                print(f"    ⚠️  Token count mismatch for aspect '{aspect_text}': expected {len(aspect_text_tokenized)}, found {aspect_token_count}")
+
+                        marked_aspects_indexes.add(aspect_idx)
+
                     except Exception:
                         # Fallback to simple word matching
+                        print(f"    ⚠️  Exception during aspect alignment for '{aspect_text}', skipping")
                         continue
             
             sentence_data.append((tokens, bio_tags))
         
+        if len(aspects) != len(marked_aspects_indexes):
+            print(f"  ⚠️  Not all aspects were marked: {len(marked_aspects_indexes)} out of {len(aspects)}")
+
         return sentence_data
     
     def save_conll_file(self, tokens_and_tags: List[Tuple[List[str], List[str]]], output_path: Path):

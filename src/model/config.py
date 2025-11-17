@@ -13,8 +13,8 @@ class ModelTrainingConfig:
     """Configuration for model training parameters."""
     
     # Model architecture
-    model_name: str = "xlm-roberta-base"
-    max_length: int = 384  # Maximum sequence length
+    model_name: str = "xlm-roberta-large"
+    max_length: int = 192  # Maximum sequence length
     dropout_rate: float = 0.1
     
     # Learning rates (dual LR strategy)
@@ -32,7 +32,7 @@ class ModelTrainingConfig:
     lr_scheduler: str = "linear"  # "linear", "cosine", "constant"
     
     # Early stopping
-    early_stopping_patience: int = 3
+    early_stopping_patience: int = 8
     early_stopping_metric: str = "test_micro_f1"  # Use test_micro_f1 since we don't have val split
     early_stopping_mode: str = "max"  # "max" for F1, "min" for loss
     
@@ -97,69 +97,148 @@ class ExperimentConfig:
 # Predefined experiment configurations
 EXPERIMENT_CONFIGS = {
     # Baseline experiments (in-language)
-    "baseline_ru": ExperimentConfig(
-        experiment_name="baseline_ru",
+    "baseline_ru_ru_all_domains": ExperimentConfig(
+        experiment_name="baseline_ru_ru_all_domains",
         experiment_type="baseline",
         train_languages=["ru"],
         test_languages=["ru"]
     ),
     
-    "baseline_kz": ExperimentConfig(
-        experiment_name="baseline_kz", 
+    "baseline_kz_kz_all_domains": ExperimentConfig(
+        experiment_name="baseline_kz_kz_all_domains", 
         experiment_type="baseline",
         train_languages=["kz"],
         test_languages=["kz"]
     ),
     
     # Zero-shot transfer (main experiment)
-    "zero_shot_ru_to_kz": ExperimentConfig(
-        experiment_name="zero_shot_ru_to_kz",
+    "zero_shot_ru_to_kz_all_domains": ExperimentConfig(
+        experiment_name="zero_shot_ru_to_kz_all_domains",
         experiment_type="zero_shot",
         train_languages=["ru"],
         test_languages=["kz"]
     ),
     
     # LODO (Leave-One-Domain-Out) experiments
-    "lodo_it": ExperimentConfig(
-        experiment_name="lodo_exclude_it",
+    "lodo_it_ru_ru": ExperimentConfig(
+        experiment_name="lodo_it_ru_ru",
         experiment_type="lodo", 
         train_domains=["ling", "med", "psy"],
         test_domains=["it"],
-        exclude_domain="it"
+        exclude_domain="it",
+        train_languages=["ru"],
+        test_languages=["ru"]
     ),
     
-    "lodo_ling": ExperimentConfig(
-        experiment_name="lodo_exclude_ling",
+    "lodo_ling_ru_ru": ExperimentConfig(
+        experiment_name="lodo_ling_ru_ru",
         experiment_type="lodo",
         train_domains=["it", "med", "psy"], 
         test_domains=["ling"],
-        exclude_domain="ling"
+        exclude_domain="ling",
+        train_languages=["ru"],
+        test_languages=["ru"]
     ),
     
-    "lodo_med": ExperimentConfig(
-        experiment_name="lodo_exclude_med",
+    "lodo_med_ru_ru": ExperimentConfig(
+        experiment_name="lodo_med_ru_ru",
         experiment_type="lodo",
         train_domains=["it", "ling", "psy"],
         test_domains=["med"],
-        exclude_domain="med"
+        exclude_domain="med",
+        train_languages=["ru"],
+        test_languages=["ru"]
     ),
     
-    "lodo_psy": ExperimentConfig(
-        experiment_name="lodo_exclude_psy", 
+    "lodo_psy_ru_ru": ExperimentConfig(
+        experiment_name="lodo_psy_ru_ru", 
         experiment_type="lodo",
         train_domains=["it", "ling", "med"],
         test_domains=["psy"],
-        exclude_domain="psy"
+        exclude_domain="psy",
+        train_languages=["ru"],
+        test_languages=["ru"]
     ),
     
+    "lodo_it_kz_kz": ExperimentConfig(
+        experiment_name="lodo_it_kz_kz",
+        experiment_type="lodo", 
+        train_domains=["ling", "med", "psy"],
+        test_domains=["it"],
+        exclude_domain="it",
+        train_languages=["kz"],
+        test_languages=["kz"]
+    ),
+    
+    "lodo_ling_kz_kz": ExperimentConfig(
+        experiment_name="lodo_ling_kz_kz",
+        experiment_type="lodo",
+        train_domains=["it", "med", "psy"], 
+        test_domains=["ling"],
+        exclude_domain="ling",
+        train_languages=["kz"],
+        test_languages=["kz"]
+    ),
+    
+    "lodo_med_kz_kz": ExperimentConfig(
+        experiment_name="lodo_med_kz_kz",
+        experiment_type="lodo",
+        train_domains=["it", "ling", "psy"],
+        test_domains=["med"],
+        exclude_domain="med",
+        train_languages=["kz"],
+        test_languages=["kz"]
+    ),
+    
+    "lodo_psy_kz_kz": ExperimentConfig(
+        experiment_name="lodo_psy_kz_kz", 
+        experiment_type="lodo",
+        train_domains=["it", "ling", "med"],
+        test_domains=["psy"],
+        exclude_domain="psy",
+        train_languages=["kz"],
+        test_languages=["kz"]
+    ),
+
     # Cross-domain + cross-language experiments
-    "cross_ru_it_to_kz_med": ExperimentConfig(
-        experiment_name="cross_ru_it_to_kz_med",
-        experiment_type="cross_domain_lang",
+    "cross_lodo_it_ru_kz": ExperimentConfig(
+        experiment_name="cross_lodo_it_ru_kz",
+        experiment_type="cross_domain_lang", 
+        train_domains=["ling", "med", "psy"],
+        test_domains=["it"],
+        exclude_domain="it",
         train_languages=["ru"],
-        test_languages=["kz"],
-        train_domains=["it"],
-        test_domains=["med"]
+        test_languages=["kz"]
+    ),
+    
+    "cross_lodo_ling_ru_kz": ExperimentConfig(
+        experiment_name="cross_lodo_ling_ru_kz",
+        experiment_type="cross_domain_lang",
+        train_domains=["it", "med", "psy"], 
+        test_domains=["ling"],
+        exclude_domain="ling",
+        train_languages=["ru"],
+        test_languages=["kz"]
+    ),
+    
+    "cross_lodo_med_ru_kz": ExperimentConfig(
+        experiment_name="cross_lodo_med_ru_kz",
+        experiment_type="cross_domain_lang",
+        train_domains=["it", "ling", "psy"],
+        test_domains=["med"],
+        exclude_domain="med",
+        train_languages=["ru"],
+        test_languages=["kz"]
+    ),
+    
+    "cross_lodo_psy_ru_kz": ExperimentConfig(
+        experiment_name="cross_lodo_psy_ru_kz", 
+        experiment_type="cross_domain_lang",
+        train_domains=["it", "ling", "med"],
+        test_domains=["psy"],
+        exclude_domain="psy",
+        train_languages=["ru"],
+        test_languages=["kz"]
     )
 }
 

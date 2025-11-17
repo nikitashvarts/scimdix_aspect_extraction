@@ -14,8 +14,21 @@ def main():
     parser.add_argument(
         "experiment", 
         choices=[
-            "baseline_ru", "baseline_kz", "zero_shot_ru_to_kz",
-            "lodo_it", "lodo_ling", "lodo_med", "lodo_psy",
+            "baseline_ru_ru_all_domains",
+            "baseline_kz_kz_all_domains",
+            "zero_shot_ru_to_kz_all_domains",
+            "lodo_it_ru_ru",
+            "lodo_ling_ru_ru",
+            "lodo_med_ru_ru",
+            "lodo_psy_ru_ru",
+            "lodo_it_kz_kz",
+            "lodo_ling_kz_kz",
+            "lodo_med_kz_kz",
+            "lodo_psy_kz_kz",
+            "cross_lodo_it_ru_kz",
+            "cross_lodo_ling_ru_kz",
+            "cross_lodo_med_ru_kz",
+            "cross_lodo_psy_ru_kz",
             "test"  # Quick test
         ],
         help="Experiment to run"

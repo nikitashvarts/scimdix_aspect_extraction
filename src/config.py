@@ -16,7 +16,7 @@ class DataConfig:
     """Configuration for data preparation module."""
     
     # Tokenizer settings
-    TOKENIZER_NAME = "xlm-roberta-base"
+    TOKENIZER_NAME = "xlm-roberta-large"
     
     # Sentence segmentation settings
     STANZA_MODELS = {
