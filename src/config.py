@@ -98,7 +98,8 @@ class DataConfig:
             for domain in cls.DOMAINS:
                 files[domain] = base_path / f"train-{domain}-{language}-aspects.csv"
         else:  # test
-            files["all_domains"] = base_path / f"testset-{language}-aspects.csv"
+            for domain in cls.DOMAINS:
+                files[domain] = base_path / f"test-{domain}-{language}-aspects.csv"
             
         return files
 

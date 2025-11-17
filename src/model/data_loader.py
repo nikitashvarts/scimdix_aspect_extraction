@@ -367,10 +367,10 @@ def get_file_paths_for_experiment(
     
     # Build test file paths  
     for lang in experiment_config.test_languages:
-        file_path = os.path.join(
-            data_dir, lang, "test", "all_domains.conll"
-        )
-        if file_path not in test_files:  # Avoid duplicates
+        for domain in experiment_config.test_domains:
+            file_path = os.path.join(
+                data_dir, lang, "test", f"{domain}.conll"
+            )
             test_files.append(file_path)
     
     return train_files, test_files

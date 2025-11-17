@@ -258,17 +258,17 @@ class DataPreparator:
         print(f"\n=== Processing {language.upper()} language ===")
         
         # Process training files by domain
-        domain_files = config.get_domain_files(language, "train")
+        train_files = config.get_domain_files(language, "train")
         all_train_data = []
         
-        for domain, file_path in domain_files.items():
+        for domain, file_path in train_files.items():
             if file_path.exists():
-                domain_data = self.process_domain_file(file_path, language)
-                all_train_data.extend(domain_data)
+                train_data = self.process_domain_file(file_path, language)
+                all_train_data.extend(train_data)
                 
                 # Save individual domain file
                 output_path = config.get_prepared_data_path(language) / config.TRAIN_SUBDIR / f"{domain}.conll"
-                self.save_conll_file(domain_data, output_path)
+                self.save_conll_file(train_data, output_path)
                 print(f"  Saved: {output_path}")
             else:
                 print(f"  Warning: File not found - {file_path}")
@@ -281,14 +281,25 @@ class DataPreparator:
         
         # Process test file
         test_files = config.get_domain_files(language, "test")
+        all_test_data = []
+        
         for domain, file_path in test_files.items():
             if file_path.exists():
                 test_data = self.process_domain_file(file_path, language)
+                all_test_data.extend(test_data)
+
+                # Save individual domain file
                 output_path = config.get_prepared_data_path(language) / config.TEST_SUBDIR / f"{domain}.conll"
                 self.save_conll_file(test_data, output_path)
                 print(f"  Saved: {output_path}")
             else:
                 print(f"  Warning: File not found - {file_path}")
+        
+        # Save combined test data
+        if all_test_data:
+            combined_output = config.get_prepared_data_path(language) / config.TEST_SUBDIR / "all_domains.conll"
+            self.save_conll_file(all_test_data, combined_output)
+            print(f"  Saved combined: {combined_output}")
     
     def run(self):
         """Main method to process all languages."""
