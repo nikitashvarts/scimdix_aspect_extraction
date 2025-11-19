@@ -8,6 +8,10 @@ This project implements XLM-RoBERTa + CRF model for aspect extraction in scienti
 
 Transfer learning approach to extract scientific aspects (AIM, METHOD, MATERIAL, TASK, TOOL, RESULT, USAGE) from Kazakh scientific texts using Russian training data.
 
+## 📊 Data for Experiments
+
+Data used for experiments can be in the original repository of SciMDIX Dataset: https://github.com/tvbat/sci-text-miner-scimdix/tree/main
+
 ## 🚀 Quick Start
 
 ### For GPU Server (Recommended)
