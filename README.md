@@ -133,12 +133,17 @@ export CUDA_VISIBLE_DEVICES=1
 
 If you use this code in your research, please cite:
 
+Shvarts N., Batura T., Mukazhanov N., Yerimbetova A., Turdalyuly M., Sakenov B. [SciMDIX: A dataset for aspect extraction from multi-domain scientific documents in Kazakh and Russian](https://www.sciencedirect.com/science/article/pii/S1877050926000566?via%3Dihub). Procedia Computer Science. 2026. V. 275, pp.474-483.
+
 ```bibtex
-@misc{scimdix_aspect_extraction,
-  title={Multilingual Aspect Extraction for Scientific Texts: Russian-Kazakh Transfer Learning},
-  author={Your Name},
-  year={2025},
-  note={Research implementation for scientific text analysis}
+@article{scimdix2026,
+  title={SciMDIX: A dataset for aspect extraction from multi-domain scientific documents in Kazakh and Russian},
+  author={Shvarts, Nikita and Batura, Tatiana and Mukazhanov, Nurzhan and Yerimbetova, Aigerim and Turdalyuly, Mussa and Sakenov, Bakzhan},
+  journal={Procedia Computer Science},
+  volume={275},
+  pages={474--483},
+  year={2026},
+  publisher={Elsevier}
 }
 ```
 
